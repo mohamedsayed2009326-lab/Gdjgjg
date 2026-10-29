@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -5,9 +6,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '**'
-      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
@@ -18,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download project
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -27,22 +25,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Locate Gradle project
+      - name: Find Android project
         id: project
         shell: bash
         run: |
-          if [ -f "./gradlew" ]; then
+          if [ -f "gradlew" ]; then
             echo "dir=." >> "$GITHUB_OUTPUT"
-          elif [ -f "./android/gradlew" ]; then
+          elif [ -f "android/gradlew" ]; then
             echo "dir=android" >> "$GITHUB_OUTPUT"
           else
-            echo "ERROR: Gradle project or gradlew not found."
-            echo "Upload the complete Android project, not only the web files."
+            echo "ERROR: No Gradle Android project found."
+            echo "Upload the complete project, not just the ZIP file."
             exit 1
           fi
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept SDK licenses and install packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Make Gradle executable
         run: chmod +x "${{ steps.project.outputs.dir }}/gradlew"
@@ -51,12 +55,10 @@ jobs:
         working-directory: ${{ steps.project.outputs.dir }}
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: plates-manager-android-apk
-          path: |
-            ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          path: "${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk"
           if-no-files-found: error
           retention-days: 14
-          
